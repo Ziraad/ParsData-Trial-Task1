@@ -4,8 +4,8 @@ from os import urandom
 import pymssql
 
 app = Flask(__name__)
-app.config["JWT_SECRET_KEY"] = "ftdsrxcsadch"
-# app.secret_key = urandom(24)
+app.config["JWT_SECRET_KEY"] = "gfhtyhtyus2312cascsc435vdfbnfrty5yvsacsa56775fkjkh"
+app.secret_key = urandom(24)
 
 host = "ZIRAAD"
 server="ZIRAAD"
@@ -53,6 +53,7 @@ def get_profile(user_id=None):
                     cursor.execute('SELECT * FROM users WHERE user_id=%d', user_id)  
                     cursor.callproc('GetUser', ('%s'%user_id,))
                     current_user = cursor.fetchone()
+                    assert current_user, 'User not found.'
 
                 else:
                     cursor.execute('SELECT user_id, username, phone_number, bio, avatar FROM users')
@@ -62,17 +63,17 @@ def get_profile(user_id=None):
                 conn.commit()
                 
                 return jsonify(current_user), 200
-    except:
-        return jsonify(error="Something went wrong"), 400
+    except Exception as e:
+        return jsonify(error="Something went wrong => " + str(e)), 404
 
 
 @app.route('/edit', methods=['PUT'])
 @jwt_required()
 def write_profile():
     if not request.is_json:
-        return {'error': 'Json Only!'}, 401
+        return jsonify(error='Json only!'), 401
 
-    current_user1 = get_jwt_identity()
+    get_user = get_jwt_identity()
 
     args = request.get_json()
 
@@ -85,7 +86,7 @@ def write_profile():
                 current_user = cursor.fetchone()
                 cursor.callproc('Update_user', 
                     (
-                        current_user1, 
+                        get_user, 
                         request.json.get('username', current_user['username']), 
                         request.json.get('phone_number', current_user['phone_number']), 
                         request.json.get('bio', current_user['bio']),
