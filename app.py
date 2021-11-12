@@ -16,7 +16,6 @@ database = "testdb"
 jwt = JWTManager(app)
 
 
-
 @app.route('/login', methods=['POST'])
 def login():
     if not request.is_json:
@@ -32,7 +31,7 @@ def login():
 
         assert phone and password, 'Input Incorrect'
 
-        assert phone == user['phone'] and password == user['password'], 'phone or password not match! or user not found'
+        assert phone == user['phone'] and password == user['password'], 'phone_number or password not match! or user not found'
 
     except Exception as e:
         return jsonify(msg=str(e)), 400
@@ -51,37 +50,18 @@ def get_profile(user_id=None):
             with conn.cursor(as_dict = True) as cursor:
 
                 if user_id is not None:
-                    cursor.execute("""
-                    CREATE PROCEDURE GetUser
-                    @user_id int
-                    AS BEGIN
-                        SELECT * FROM users WHERE user_id = @user_id
-                    END
-                    """)
+                    cursor.execute('SELECT * FROM users WHERE user_id=%d', user_id)  
                     cursor.callproc('GetUser', ('%s'%user_id,))
-                    conn.commit()
+                    current_user = cursor.fetchone()
 
                 else:
-                    cursor.execute("""
-                    CREATE PROCEDURE GetUsers
-                    AS
-                        SELECT user_id, username, phone_number, bio, avatar FROM users
-                    
-                    """)
+                    cursor.execute('SELECT user_id, username, phone_number, bio, avatar FROM users')
                     cursor.callproc('GetUsers')
-                    conn.commit()
 
-                current_user = [
-                    {
-                        "user_id":row['user_id'],  
-                        "username":row['username'], 
-                        "phone_number":row['phone_number'], 
-                        "bio":row['bio'],
-                        "avatar":row['avatar']
-                    } 
-                    for row in cursor]
+                    current_user = cursor.fetchall()
+                conn.commit()
                 
-                return jsonify(current_user)
+                return jsonify(current_user), 200
     except:
         return jsonify(error="Something went wrong"), 400
 
@@ -92,23 +72,31 @@ def write_profile():
     if not request.is_json:
         return {'error': 'Json Only!'}, 401
 
-    current_user = get_jwt_identity()
+    current_user1 = get_jwt_identity()
 
     args = request.get_json()
 
-    username = args.get('username')
     phone_number = args.get('phone_number')
-    bio = args.get('bio')
 
     try:
         with pymssql.connect(host=host, server=server, user=user, password=password, database='testdb') as conn:
-            with conn.cursor() as cursor:
-                cursor.callproc('Update_user', (current_user, username, phone_number, bio))
+            with conn.cursor(as_dict = True) as cursor:
+                cursor.execute('SELECT * FROM users WHERE phone_number=%s', phone_number)
+                current_user = cursor.fetchone()
+                cursor.callproc('Update_user', 
+                    (
+                        current_user1, 
+                        request.json.get('username', current_user['username']), 
+                        request.json.get('phone_number', current_user['phone_number']), 
+                        request.json.get('bio', current_user['bio']),
+                    )
+                )
                 conn.commit()
                 
-            return jsonify(msg='update successfully'), 200
+                return jsonify(msg='update successfully'), 200
+
     except Exception as e:
-        return jsonify(msg='Something went wrong'), 400
+        return jsonify(msg='Something went wrong => ' + str(e)), 400
 
 if __name__ == '__main__':
     app.run(debug=True)
