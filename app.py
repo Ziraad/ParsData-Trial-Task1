@@ -25,7 +25,7 @@ def login():
     try:
         args = request.get_json()
 
-        phone = args.get('phone')
+        phone = args.get('phone_number')
         password = args.get('password')
 
         user = {'phone': '09169640460', 'password': '12345'}
@@ -59,6 +59,7 @@ def get_profile(user_id=None):
                     END
                     """)
                     cursor.callproc('GetUser', ('%s'%user_id,))
+                    conn.commit()
 
                 else:
                     cursor.execute("""
@@ -68,6 +69,7 @@ def get_profile(user_id=None):
                     
                     """)
                     cursor.callproc('GetUsers')
+                    conn.commit()
 
                 current_user = [
                     {
@@ -93,47 +95,20 @@ def write_profile():
     current_user = get_jwt_identity()
 
     args = request.get_json()
-    user_id = args.get('user_id')
-    # print("id: ", user_id)
+
     username = args.get('username')
-    print('username: ', username)
     phone_number = args.get('phone_number')
-    print('phone_number: ', phone_number)
-    # passw = args.get('password')
-    # print('passw: ', passw)
     bio = args.get('bio')
-    print('bio: ', bio)
-    avatar = args.get('avatar')
 
-    with pymssql.connect(host=host, server=server, user=user, password=password, database="testdb") as conn:
-        with conn.cursor(as_dict = True) as cursor:
-            cursor.execute("""
-            ALTER PROCEDURE WriteProfile
-            @id int,
-            @username VARCHAR(100),
-            @phone_number VARCHAR(100)
-            AS BEGIN
-                 SET NOCOUNT ON;
-                 UPDATE users
-                 SET username=ISNULL(@username,username), 
-                     phone_number=ISNULL(@phone_number,phone_number) 
-
-                 WHERE user_id=@user_id
-            END
-            """)
-            cursor.callproc('WriteProfile', (user_id, str(username), str(phone_number),))
-
-            current_user = [
-                {
-                    "user_id":row['user_id'],  
-                    "username":row['username'], 
-                    "phone_number":row['phone_number'], 
-                    "bio":row['bio'],
-                    "avatar":row['avatar']
-                } 
-                for row in cursor]
-            
-            return jsonify(current_user)
+    try:
+        with pymssql.connect(host=host, server=server, user=user, password=password, database='testdb') as conn:
+            with conn.cursor() as cursor:
+                cursor.callproc('Update_user', (current_user, username, phone_number, bio))
+                conn.commit()
+                
+            return jsonify(msg='update successfully'), 200
+    except Exception as e:
+        return jsonify(msg='Something went wrong'), 400
 
 if __name__ == '__main__':
     app.run(debug=True)
